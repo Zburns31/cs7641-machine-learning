@@ -124,3 +124,33 @@ def create_train_test_split(
         logger.info(f"Train Set Size: {len(X_TRAIN)} | Test Set Size: {len(X_TEST)}")
 
     return X_TRAIN, X_TEST, y_train, y_test, X, y
+
+
+def onehot_encode_categories(df):
+    # Identify categorical columns
+    categorical_columns = df.select_dtypes(include=["category"]).columns
+
+    # Use pd.get_dummies to one-hot encode all categorical variables
+    df_encoded = pd.get_dummies(
+        df, columns=categorical_columns, dummy_na=False, drop_first=True, dtype=int
+    )
+    df_encoded.attrs = df.attrs
+
+    return df_encoded
+
+
+def sample_dataframe(
+    df: pd.DataFrame, fraction: float, random_state: int = None
+) -> pd.DataFrame:
+    """
+    Shuffle the rows of a DataFrame while keeping all rows intact.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame to shuffle.
+        random_state (int, optional): Seed for the random number generator. Defaults to None.
+
+    Returns:
+        pd.DataFrame: A new DataFrame with shuffled rows.
+    """
+    # Shuffle the DataFrame using the sample method
+    return df.sample(frac=fraction, random_state=random_state).reset_index(drop=True)

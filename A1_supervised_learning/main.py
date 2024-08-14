@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from typing import List, Dict, Any, Tuple
-from dataset import WINE_DATA_SCHEMA
+from dataset import WINE_DATA_SCHEMA, BANK_MARKETING_TYPES_MAP
 from experiment_runner import MLExperimentRunner
 from learners.DT import DTClassifier
 from learners.AdaBoost import ABoostingClassifier
@@ -38,6 +38,8 @@ from pipeline import (
     cast_datatypes,
     create_train_test_split,
     convert_to_binary,
+    onehot_encode_categories,
+    sample_dataframe,
 )
 
 # Used for logging purposes
@@ -192,6 +194,7 @@ if __name__ == "__main__":
         wine_df
         .pipe(cast_datatypes, column_type_map=WINE_DATA_SCHEMA)
         .pipe(convert_to_binary, column=target, threshold=6)
+        .pipe(sample_dataframe, fraction = 1.0, random_state=config.RANDOM_SEED)
     )
     # fmt: on
 
@@ -200,9 +203,27 @@ if __name__ == "__main__":
     )
 
     # Bank Marketing
+    target = "accepted"
+    bank_df = load_data(config, "bank-additional-full.csv", delimiter=";")
+    bank_df = bank_df.rename(columns={"y": "accepted"})
+    bank_df["accepted"] = np.where(bank_df["accepted"] == "yes", 1, 0)
+
+    bank_df.attrs = {"name": "bank_marketing"}
+
+    # fmt: off
+    bank_df = (
+        bank_df
+        .pipe(cast_datatypes, column_type_map=BANK_MARKETING_TYPES_MAP)
+        .pipe(onehot_encode_categories)
+        .pipe(sample_dataframe, fraction = 0.3, random_state = config.RANDOM_SEED)
+    )
+    # fmt: on
+    X_TRAIN, X_TEST, y_train, y_test, bank_X, bank_y = create_train_test_split(
+        bank_df, target, config, verbose=verbose
+    )
 
     # Combine all datasets
-    datasets = [(wine_X, wine_y)]
+    datasets = [(wine_X, wine_y), (bank_X, bank_y)]
 
     print("Finished Processing Dataset")
     print("-" * width)
