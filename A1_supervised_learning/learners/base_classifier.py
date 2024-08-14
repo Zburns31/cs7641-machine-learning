@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -11,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Type, List, Self, Any, Callable, Union
 
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.model_selection import learning_curve, validation_curve
+from sklearn.model_selection import learning_curve, validation_curve, cross_validate
 from sklearn.metrics import (
     make_scorer,
     accuracy_score,
@@ -305,7 +306,16 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
             model_name = self.name.replace(" ", "_")
             plot_name = f"{dataset_name}_{model_name}_validation_curve.png"
 
-            image_path = Path(get_directory(self.config.IMAGE_DIR), plot_name)
+            image_path = Path(
+                get_directory(
+                    self.config.ARTIFACTS_DIR,
+                    self.config.IMAGE_DIR,
+                    dataset_name,
+                    model_name,
+                    param_name,
+                ),
+                plot_name,
+            )
             plt.savefig(image_path)
 
             if self.verbose:
@@ -322,14 +332,12 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
 
         return best_param_value
 
-    def plot_training_run_time(self, learner: BaseEstimator) -> None:
-        """
-        TODO: Move implementation from DT into here
+    def compute_run_times(self, X: pd.DataFrame, y: pd.Series, cv=5) -> pd.DataFrame:
+        clf = self.model.__class__()
+        scores = cross_validate(clf, X, y, cv=cv, return_train_score=True)
+        scores["model"] = [self.model.__class__.__name__] * cv
 
-        Args:
-            learner (BaseEstimator): _description_
-        """
-        pass
+        return pd.DataFrame(scores)
 
     def plot_confusion_matrix(self):
         pass

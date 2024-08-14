@@ -25,10 +25,11 @@ import numpy as np
 import pandas as pd
 
 from typing import List, Dict, Any, Tuple
-from dataset import Dataset, WINE_DATA_SCHEMA
+from dataset import WINE_DATA_SCHEMA
 from experiment_runner import MLExperimentRunner
 from learners.DT import DTClassifier
-from experiment_runner import MLExperimentRunner
+from learners.AdaBoost import ABoostingClassifier
+from experiment_runner import MLExperimentRunner, plot_model_run_times
 from config import Config, DATA_PROCESSING_PARAMS, ML_PREPROCESS_PARAMS
 from utilities import print_tuples
 
@@ -54,7 +55,14 @@ DT_PARAM_GRID = {
     "min_samples_leaf": np.arange(1, 101, 10),
 }
 
-# GBDT
+# AdaBoost
+BOOSTING_EVAL_METRIC = "accuracy"
+# Outlines what experiments we want to run. These get passed to the underlying estimator
+BOOSTING_PARAM_GRID = {
+    "max_depth": np.arange(1, 21),
+    "n_estimators": np.arange(1, 51),
+    "learning_rate": np.linspace(0.001, 0.1, 100),
+}
 
 # KNN
 
@@ -87,6 +95,7 @@ def run_experiment_configuration(
         List[dict]: Experiment run times for each configuration
     """
 
+    experiment_data = {}
     experiment_times = []
 
     for X, y in datasets:
@@ -96,11 +105,15 @@ def run_experiment_configuration(
         if config.VERBOSE:
             print(f"Experiment Name: {experiment.experiment_name}")
 
-        experiment_times_dict = experiment.main(features=X, target=y)
-        experiment_times.append(dict(experiment_times_dict))
+        experiment_times_dict, run_times_df = experiment.main(features=X, target=y)
+        experiment_data[experiment.dataset_name] = [
+            experiment_times_dict,
+            run_times_df,
+        ]
+        # experiment_times.append(dict(experiment_times_dict))
         print("-" * width)
 
-    return experiment_times
+    return experiment_data
 
 
 if __name__ == "__main__":
@@ -188,6 +201,7 @@ if __name__ == "__main__":
 
     # Bank Marketing
 
+    # Combine all datasets
     datasets = [(wine_X, wine_y)]
 
     print("Finished Processing Dataset")
@@ -197,8 +211,8 @@ if __name__ == "__main__":
 
     print("Beginning ML Experiments")
     experiment_results = []
-
     exp_type = args.experiment_type
+
     if exp_type in ["dt", "all"]:
         # Set across experiment configs to avoid overfitting
         dt_base_params = {"max_depth": 5}
@@ -210,14 +224,34 @@ if __name__ == "__main__":
             param_grid=DT_PARAM_GRID,
             config=config,
         )
+        experiment_results.append(dt_experiment_results)
+
+    if exp_type in ["boosting", "all"]:
+
+        boosting_base_params = {"max_depth": 5}
+        boosting_experiment_results = run_experiment_configuration(
+            datasets=datasets,
+            estimator=ABoostingClassifier,
+            base_params=boosting_base_params,
+            eval_metric=BOOSTING_EVAL_METRIC,
+            param_grid=BOOSTING_PARAM_GRID,
+            config=config,
+        )
+        experiment_results.append(boosting_experiment_results)
 
     if exp_type in ["ann", "all"]:
-        raise NotImplementedError
-    if exp_type in ["boosting", "all"]:
         raise NotImplementedError
     if exp_type in ["knn", "all"]:
         raise NotImplementedError
     if exp_type in ["svm", "all"]:
         raise NotImplementedError
 
-    print(json.dumps(dt_experiment_results, indent=4))
+    # Plot model run times
+    for exp in experiment_results:
+        run_times_df = pd.DataFrame()
+        for data_set, (exp_results, exp_run_times) in exp.items():
+            run_times_df = pd.concat([run_times_df, exp_run_times])
+
+        plot_model_run_times(run_times_df, dataset_name=data_set, config=config)
+
+    # print(json.dumps(dt_experiment_results, indent=4))

@@ -27,7 +27,7 @@ class DTClassifier(BaseClassifier):
         config: Type[Config],
         param_grid: Dict[str, List[int]],
         eval_metric: str,
-        base_params: Dict[str, float],
+        base_params: Dict[str, float] = {},
     ):
         super().__init__(
             model=DecisionTreeClassifier(
@@ -66,34 +66,6 @@ class DTClassifier(BaseClassifier):
             np.ndarray: Returns the mean response given the predictors
         """
         return self.model.predict(X)
-
-    def plot_training_run_time(self, X, y, cv=5, show_plot=False):
-        """
-        TODO
-
-        Args:
-            X (_type_): _description_
-            y (_type_): _description_
-            cv (int, optional): _description_. Defaults to 5.
-            show_plot (bool, optional): _description_. Defaults to False.
-        """
-        start_time = time.time()
-        scores = cross_val_score(self.model, X, y, cv=cv)
-        end_time = time.time()
-
-        runtime = end_time - start_time
-
-        plt.figure()
-        plt.title(f"Training Runtime ({self.name})")
-        plt.xlabel("Training examples")
-        plt.ylabel("Runtime (seconds)")
-        plt.bar(["Run Time"], [runtime])
-
-        if show_plot:
-            plt.show()
-
-    def prune_tree(self):
-        pass
 
     def export_tree(self):
         pass
