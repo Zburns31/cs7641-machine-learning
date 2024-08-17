@@ -1,4 +1,5 @@
 import logging
+import sys
 from config import Config
 from pathlib import Path
 
@@ -18,6 +19,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 import argparse
 import os
 import json
@@ -29,6 +34,7 @@ from dataset import WINE_DATA_SCHEMA, BANK_MARKETING_TYPES_MAP
 from experiment_runner import MLExperimentRunner
 from learners.DT import DTClassifier
 from learners.AdaBoost import ABoostingClassifier
+from sklearn.tree import DecisionTreeClassifier
 from experiment_runner import MLExperimentRunner, plot_model_run_times
 from config import Config, DATA_PROCESSING_PARAMS, ML_PREPROCESS_PARAMS
 from utilities import print_tuples
@@ -61,9 +67,9 @@ DT_PARAM_GRID = {
 BOOSTING_EVAL_METRIC = "accuracy"
 # Outlines what experiments we want to run. These get passed to the underlying estimator
 BOOSTING_PARAM_GRID = {
-    "max_depth": np.arange(1, 21),
-    "n_estimators": np.arange(1, 51),
-    "learning_rate": np.linspace(0.001, 0.1, 100),
+    "estimator__max_depth": np.arange(1, 21),
+    "n_estimators": np.arange(1, 50),
+    "learning_rate": np.arange(0.01, 1, 0.005),
 }
 
 # KNN
@@ -164,6 +170,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     verbose = args.verbose
+    dry_run = args.dry_run
 
     if args.profile_report:
         DATA_PROCESSING_PARAMS["profile_report"] = True
@@ -179,11 +186,15 @@ if __name__ == "__main__":
     if verbose:
         print(f"{parser.prog} CLI Arguments")
         print("-" * width)
-        print(print_tuples(args._get_kwargs()))
+        print_tuples(args._get_kwargs())
         print("-" * width)
+
+    if dry_run:
+        sys.exit()
 
     #############################################################################
     # Data Processing - Collect & Process Datasets
+    # TODO: Add Scaling to pipeline
 
     # Wine Data
     target = "quality"
@@ -236,7 +247,10 @@ if __name__ == "__main__":
 
     if exp_type in ["dt", "all"]:
         # Set across experiment configs to avoid overfitting
-        dt_base_params = {"max_depth": 5}
+        dt_base_params = {
+            "max_depth": 5,
+            "class_weight": "balanced",
+        }
         dt_experiment_results = run_experiment_configuration(
             datasets=datasets,
             estimator=DTClassifier,
@@ -249,7 +263,10 @@ if __name__ == "__main__":
 
     if exp_type in ["boosting", "all"]:
 
-        boosting_base_params = {"max_depth": 5}
+        boosting_base_params = {
+            "estimator__max_depth": 1,
+            "estimator__class_weight": "balanced",
+        }
         boosting_experiment_results = run_experiment_configuration(
             datasets=datasets,
             estimator=ABoostingClassifier,
@@ -260,12 +277,12 @@ if __name__ == "__main__":
         )
         experiment_results.append(boosting_experiment_results)
 
-    if exp_type in ["ann", "all"]:
-        raise NotImplementedError
-    if exp_type in ["knn", "all"]:
-        raise NotImplementedError
-    if exp_type in ["svm", "all"]:
-        raise NotImplementedError
+    # if exp_type in ["ann", "all"]:
+    #     raise NotImplementedError
+    # if exp_type in ["knn", "all"]:
+    #     raise NotImplementedError
+    # if exp_type in ["svm", "all"]:
+    #     raise NotImplementedError
 
     # Plot model run times
     for exp in experiment_results:

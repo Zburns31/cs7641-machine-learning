@@ -189,40 +189,83 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
         if show_plot:
             plt.show()
 
+    # def compute_best_param_value(
+    #     self,
+    #     param_range: Union[np.ndarray, List[float]],
+    #     mean_test_scores: np.ndarray,
+    #     incr_threshold: float = 0.5,
+    # ) -> float:
+    #     """
+    #     Returns the best parameter value based on maximum test score and when test scores
+    #     stop increasing by more than a threshold percentage.
+
+    #     Args:
+    #         param_range (Union[np.ndarray, List[float]]): The range of parameter values.
+    #         test_scores (np.ndarray): Array of test scores.
+    #         incr_threshold (float, optional): Threshold percentage for stopping criteria. Defaults to 0.5.
+
+    #     Returns:
+    #         float: The best parameter value.
+    #     """
+
+    #     best_param_value1 = None
+    #     # Loop to find the parameter value when test accuracy stops increasing by more than the threshold
+    #     for i in range(1, len(mean_test_scores)):
+    #         if mean_test_scores[i] - mean_test_scores[i - 1] <= incr_threshold:
+    #             best_param_value1 = param_range[i - 1]
+    #             break
+
+    #     # If no such point is found, return the best parameter value based on max test score
+    #     best_param_index = np.argmax(mean_test_scores)
+    #     best_param_value2 = param_range[best_param_index]
+
+    #     if best_param_value1 == best_param_value2:
+    #         return best_param_value1
+    #     else:
+    #         return best_param_value2
+
     def compute_best_param_value(
-        self,
-        param_range: Union[np.ndarray, List[float]],
-        mean_test_scores: np.ndarray,
-        incr_threshold: float = 0.5,
-    ) -> float:
-        """
-        Returns the best parameter value based on maximum test score and when test scores
-        stop increasing by more than a threshold percentage.
+        self, train_scores, test_scores, param_range, threshold=0.01
+    ):
+        """Returns the best parameter value based on maximum test score and when test scores stop increasing by more than a threshold percentage
 
         Args:
-            param_range (Union[np.ndarray, List[float]]): The range of parameter values.
-            test_scores (np.ndarray): Array of test scores.
-            incr_threshold (float, optional): Threshold percentage for stopping criteria. Defaults to 0.5.
+            train_scores (_type_): Train scores for the CV run
+            test_scores (_type_): Test scores for the CV run
+            param_range (_type_): Hyperparameter values
+            threshold (float, optional): Minimum increase in eval metric for test scores. Defaults to 0.01.
 
         Returns:
-            float: The best parameter value.
+            int or float: Best hyperparameter value
         """
 
-        best_param_value1 = None
-        # Loop to find the parameter value when test accuracy stops increasing by more than the threshold
-        for i in range(1, len(mean_test_scores)):
-            if mean_test_scores[i] - mean_test_scores[i - 1] <= incr_threshold:
-                best_param_value1 = param_range[i - 1]
+        # Compute the mean scores across the cross-validation folds
+        train_scores_mean = np.mean(train_scores, axis=1)
+        test_scores_mean = np.mean(test_scores, axis=1)
+
+        # Initialize variables to track the best parameter
+        # best_param_idx = 0
+        best_test_score = test_scores_mean[0]
+
+        for idx in range(1, len(test_scores_mean)):
+            # If test score decreases, break and return the previous parameter value
+            if test_scores_mean[idx] < test_scores_mean[idx - 1]:
+                best_param_idx = idx
                 break
 
-        # If no such point is found, return the best parameter value based on max test score
-        best_param_index = np.argmax(mean_test_scores)
-        best_param_value2 = param_range[best_param_index]
+            # Check if the difference between training and test scores is within the acceptable range
+            score_difference = train_scores_mean[idx] - test_scores_mean[idx]
 
-        if best_param_value1 == best_param_value2:
-            return best_param_value1
-        else:
-            return best_param_value2
+            # Update best parameter if the test score is higher and close to the train score
+            if (
+                test_scores_mean[idx] > best_test_score
+                and score_difference <= threshold
+            ):
+                best_param_idx = idx
+                best_test_score = test_scores_mean[idx]
+                break
+
+        return param_range[best_param_idx]
 
     def plot_validation_curve(
         self,
@@ -234,7 +277,7 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
         cv: int = 5,
         save_plot: bool = True,
         show_plot: bool = False,
-        incr_threshold: float = 0.5,
+        incr_threshold: float = 0.01,
     ) -> int:
         """Plot a validation curve with the range of hyperparameter values on the X-axis and the metric score on the Y-axis. This function
         also returns the value of the specified hyperparameter with the best testing score
@@ -269,7 +312,10 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
 
         # Find the parameter value when test accuracy stops increasing by more than incr_threshold %
         best_param_value = self.compute_best_param_value(
-            param_range=param_range, mean_test_scores=test_scores_mean
+            train_scores=train_scores,
+            test_scores=test_scores,
+            param_range=param_range,
+            threshold=incr_threshold,
         )
 
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 6), dpi=100, sharey=False)
@@ -277,6 +323,10 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
         plt.title(f"Validation Curve for {param_name}")
         plt.xlabel(cleaned_param_name)
         plt.ylabel("Score")
+
+        # Ensure X-labels are discrete values if param range is discrete
+        if np.all(np.mod(param_range, 1) == 0):
+            plt.xticks(np.arange(min(param_range), max(param_range) + 1, step=1))
 
         plt.plot(param_range, train_scores_mean, label="Training score", color="r")
         plt.fill_between(

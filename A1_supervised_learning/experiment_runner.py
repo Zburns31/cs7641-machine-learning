@@ -122,7 +122,7 @@ class MLExperimentRunner:
         )
 
         if self.config.VERBOSE:
-            logger.info(json.dumps(estimator.get_params(), indent=4))
+            logger.info(json.dumps(estimator.get_params(), indent=4, default=str))
 
         best_param_value = estimator.plot_validation_curve(
             X,

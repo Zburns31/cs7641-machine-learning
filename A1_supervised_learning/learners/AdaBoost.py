@@ -11,12 +11,7 @@ from typing import Dict, Tuple, List, Self, Type, Union
 from pathlib import Path
 
 from sklearn.ensemble import AdaBoostClassifier
-from sklearn.model_selection import (
-    train_test_split,
-    learning_curve,
-    validation_curve,
-    cross_val_score,
-)
+from sklearn.tree import DecisionTreeClassifier
 
 
 class ABoostingClassifier(BaseClassifier):
@@ -29,8 +24,20 @@ class ABoostingClassifier(BaseClassifier):
         eval_metric: str,
         base_params: Dict[str, float],
     ):
+        # Seperate hyperparams for Adaboost and Underlying Estimator
+        base_est_params = {
+            k.replace("estimator__", ""): v
+            for k, v in base_params.items()
+            if "estimator__" in k
+        }
+        base_params = {k: v for k, v in base_params.items() if "estimator__" not in k}
+
         super().__init__(
-            model=AdaBoostClassifier(random_state=config.RANDOM_SEED, **base_params),
+            model=AdaBoostClassifier(
+                random_state=config.RANDOM_SEED,
+                estimator=DecisionTreeClassifier(**base_est_params),
+                **base_params
+            ),
             config=config,
             param_grid=param_grid,
             eval_metric=eval_metric,
