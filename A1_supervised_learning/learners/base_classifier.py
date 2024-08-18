@@ -325,6 +325,9 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
         plt.ylabel("Score")
 
         # Ensure X-labels are discrete values if param range is discrete
+        # import pdb
+
+        # pdb.set_trace()
         if np.all(np.mod(param_range, 1) == 0):
             plt.xticks(np.arange(min(param_range), max(param_range) + 1, step=1))
 
@@ -381,6 +384,113 @@ class BaseClassifier(ClassifierMixin, BaseEstimator, ABC):
             best_param_value = round(best_param_value, 3)
 
         return best_param_value
+
+    def plot_validation_curve_by_groups(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        dataset_name: str,
+        param_name: str,
+        param_range: Union[np.ndarray, List[str]],
+        cv: int = 5,
+        save_plot: bool = True,
+        show_plot: bool = False,
+    ) -> str:
+        """Plot a validation curve with the range of hyperparameter values on the X-axis and the metric score on the Y-axis.
+        This function also returns the value of the specified hyperparameter with the best testing score.
+
+        Args:
+            X (np.array): Represents the predictor/independent features.
+            y (np.array): Represents the target/response variable.
+            dataset_name (str): Name of the dataset we are training/predicting against.
+            param_name (str): Hyperparameter that we are using in the underlying model.
+            param_range (Union[np.ndarray, List[str]]): Range of hyperparameter values.
+            cv (int, optional): Number of cross-validation folds. Defaults to 5.
+            save_plot (bool, optional): Whether to save the generated charts or not. Defaults to True.
+            show_plot (bool, optional): Whether to plot the generated charts or not. Defaults to False.
+
+        Returns:
+            str: The value of the specified hyperparameter that returns the best mean test score.
+        """
+
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 6), dpi=100, sharey=False)
+        cleaned_param_name = param_name.replace("_", " ").capitalize()
+        plt.title(f"Validation Curve for {param_name}")
+        plt.xlabel(cleaned_param_name)
+        plt.ylabel("Score")
+
+        colors = plt.cm.rainbow(np.linspace(0, 1, len(self.grouping_vals)))
+
+        # Plot for each grouping value
+        metric_scores = []
+        for idx, (group_param_name, grouping_val) in enumerate(self.grouping_vals):
+            # Update the model with the current grouping value
+            self.model.set_params(**{group_param_name: grouping_val})
+
+            train_scores, test_scores = validation_curve(
+                self.model,
+                X,
+                y,
+                param_name=param_name,
+                param_range=param_range,
+                cv=cv,
+            )
+
+            train_scores_mean = np.mean(train_scores, axis=1) * 100
+            train_scores_std = np.std(train_scores, axis=1) * 100
+            test_scores_mean = np.mean(test_scores, axis=1) * 100
+            test_scores_std = np.std(test_scores, axis=1) * 100
+
+            # best_param_value = self.compute_best_param_value(train_scores, test_scores, param_range, threshold = 0.01)
+            best_param_value = param_range[np.argmax(test_scores_mean)]
+            metric_scores.append(best_param_value)
+
+            # Plotting the curve for the current grouping_val
+            plt.plot(
+                param_range,
+                train_scores_mean,
+                label=f"Training score ({grouping_val})",
+                linestyle="--",
+                color=colors[idx],
+            )
+            plt.plot(
+                param_range,
+                test_scores_mean,
+                label=f"Cross-validation score ({grouping_val})",
+                color=colors[idx],
+            )
+
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+        plt.legend(loc="best")
+        plt.tight_layout()
+
+        if save_plot:
+            model_name = self.name.replace(" ", "_")
+            plot_name = f"{dataset_name}_{model_name}_validation_curve.png"
+
+            image_path = Path(
+                get_directory(
+                    self.config.ARTIFACTS_DIR,
+                    self.config.IMAGE_DIR,
+                    dataset_name,
+                    model_name,
+                    param_name,
+                ),
+                plot_name,
+            )
+            plt.savefig(image_path)
+
+            if self.verbose:
+                # Relative path
+                print(
+                    f"Saving Validation Curve to: {image_path.relative_to(Path.cwd())}"
+                )
+
+        if show_plot:
+            plt.show()
+
+        # For string-based parameters, simply return the best grouping value based on test scores
+        return max(metric_scores)
 
     def compute_run_times(self, X: pd.DataFrame, y: pd.Series, cv=5) -> pd.DataFrame:
         clf = self.model.__class__()

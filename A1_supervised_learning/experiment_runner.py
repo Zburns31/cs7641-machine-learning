@@ -124,14 +124,25 @@ class MLExperimentRunner:
         if self.config.VERBOSE:
             logger.info(json.dumps(estimator.get_params(), indent=4, default=str))
 
-        best_param_value = estimator.plot_validation_curve(
-            X,
-            y,
-            dataset_name=self.dataset_name,
-            param_name=param_name,
-            param_range=param_range,
-            save_plot=True,
-        )
+        if hasattr(estimator, "grouping_vals"):
+            best_param_value = estimator.plot_validation_curve_by_groups(
+                X,
+                y,
+                dataset_name=self.dataset_name,
+                param_name=param_name,
+                param_range=param_range,
+                save_plot=True,
+            )
+
+        else:
+            best_param_value = estimator.plot_validation_curve(
+                X,
+                y,
+                dataset_name=self.dataset_name,
+                param_name=param_name,
+                param_range=param_range,
+                save_plot=True,
+            )
 
         estimator.set_params(**{param_name: best_param_value})
         estimator.plot_learning_curve(

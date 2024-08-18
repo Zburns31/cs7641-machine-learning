@@ -34,7 +34,9 @@ from dataset import WINE_DATA_SCHEMA, BANK_MARKETING_TYPES_MAP
 from experiment_runner import MLExperimentRunner
 from learners.DT import DTClassifier
 from learners.AdaBoost import ABoostingClassifier
-from sklearn.tree import DecisionTreeClassifier
+from learners.KNN import KNNClassifier
+from learners.SVM import SVMClassifier
+from learners.ANN import ANNClassifier
 from experiment_runner import MLExperimentRunner, plot_model_run_times
 from config import Config, DATA_PROCESSING_PARAMS, ML_PREPROCESS_PARAMS
 from utilities import print_tuples
@@ -68,15 +70,33 @@ BOOSTING_EVAL_METRIC = "accuracy"
 # Outlines what experiments we want to run. These get passed to the underlying estimator
 BOOSTING_PARAM_GRID = {
     "estimator__max_depth": np.arange(1, 21),
-    "n_estimators": np.arange(1, 50),
+    "n_estimators": np.arange(1, 51, 1),
     "learning_rate": np.arange(0.01, 1, 0.005),
 }
 
 # KNN
-
+KNN_EVAL_METRIC = "accuracy"
+KNN_PARAM_GRID = {
+    # "metric": np.array(["manhattan", "euclidean", "chebyshev"]),
+    "n_neighbors": np.arange(1, 11),
+    # "weights": np.array(["uniform", "distance"]),
+}
 # SVM
+SVM_EVAL_METRIC = "accuracy"
+SVM_PARAM_GRID = {
+    "C": np.arange(0.001, 5, 0.25),
+    "tol": np.arange(0.001, 0.1, 0.01),
+    "iters": np.arange(1, 100, 10),
+    # "degree": np.arange(1,10,1),
+}
 
 # ANN
+ANN_EVAL_METRIC = "accuracy"
+ANN_PARAM_GRID = {
+    "alpha": np.arange(0.001, 5, 0.25),
+    # "hidden_layer_sizes": 0,  # Placeholder
+    # "learning_rate": np.arange(0.0001, 0.1, 0.005),
+}
 
 
 ###############################################################################
@@ -107,6 +127,21 @@ def run_experiment_configuration(
     experiment_times = []
 
     for X, y in datasets:
+        # Determine # of hidden layers/neurons based on size
+        num_feats = X.shape[1]
+        if "hidden_layer_sizes" in param_grid:
+            neurons = [
+                num_feats,
+                int(num_feats * 0.66),
+                num_feats // 2,
+                int(num_feats * 1 / 3),
+            ]
+            hiddens = [(n,) * l for l in [1, 2, 3] for n in neurons]
+            param_grid["hidden_layer_sizes"] = hiddens
+
+        if "hidden_layer_sizes" in base_params:
+            base_params["hidden_layer_sizes"] = (num_feats,)
+
         experiment = MLExperimentRunner(
             estimator, base_params, X, y, config, eval_metric, param_grid
         )
@@ -194,7 +229,7 @@ if __name__ == "__main__":
 
     #############################################################################
     # Data Processing - Collect & Process Datasets
-    # TODO: Add Scaling to pipeline
+    # TODO: Add Scaling to pipeline as an optional step or seperate datasets to determine impact
 
     # Wine Data
     target = "quality"
@@ -277,12 +312,44 @@ if __name__ == "__main__":
         )
         experiment_results.append(boosting_experiment_results)
 
-    # if exp_type in ["ann", "all"]:
-    #     raise NotImplementedError
-    # if exp_type in ["knn", "all"]:
-    #     raise NotImplementedError
-    # if exp_type in ["svm", "all"]:
-    #     raise NotImplementedError
+    if exp_type in ["ann", "all"]:
+        ann_base_params = {"learning_rate": "constant", "hidden_layer_sizes": None}
+        ann_experiment_results = run_experiment_configuration(
+            datasets=datasets,
+            estimator=ANNClassifier,
+            base_params=ann_base_params,
+            eval_metric=ANN_EVAL_METRIC,
+            param_grid=ANN_PARAM_GRID,
+            config=config,
+        )
+        experiment_results.append(ann_experiment_results)
+
+    if exp_type in ["knn", "all"]:
+        knn_base_params = {
+            "n_neighbors": 5,
+            "weights": "uniform",
+            "metric": "euclidean",
+        }
+        knn_experiment_results = run_experiment_configuration(
+            datasets=datasets,
+            estimator=KNNClassifier,
+            base_params=knn_base_params,
+            eval_metric=KNN_EVAL_METRIC,
+            param_grid=KNN_PARAM_GRID,
+            config=config,
+        )
+        experiment_results.append(knn_experiment_results)
+    if exp_type in ["svm", "all"]:
+        svm_base_params = {"class_weight": "balanced", "kernel": "rbf"}
+        svm_experiment_results = run_experiment_configuration(
+            datasets=datasets,
+            estimator=SVMClassifier,
+            base_params=svm_base_params,
+            eval_metric=SVM_EVAL_METRIC,
+            param_grid=SVM_PARAM_GRID,
+            config=config,
+        )
+        experiment_results.append(svm_experiment_results)
 
     # Plot model run times
     for exp in experiment_results:
